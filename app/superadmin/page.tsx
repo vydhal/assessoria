@@ -1,13 +1,17 @@
-"use client"
+// app/superadmin/page.tsx
+// REMOVIDO: "use client"
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+
+import { Assessoria, User, Payment } from '@prisma/client'; // Importe os modelos do Prisma
+
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +19,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
 import {
   Shield,
   Users,
@@ -26,184 +30,144 @@ import {
   Plus,
   MoreHorizontal,
   Edit,
-  Trash2,
   Eye,
+  Trash2,
   Settings,
   Activity,
   TrendingUp,
   UserPlus,
   Crown,
-} from "lucide-react"
-import Link from "next/link"
+} from "lucide-react";
+import Link from "next/link";
+import { prisma } from "@/lib/prisma"; // Importar o Prisma Client
 
-export default function SuperAdminDashboard() {
-  const [searchTerm, setSearchTerm] = useState("")
+export default async function SuperAdminDashboard() { // Tornar o componente assíncrono para buscar dados
+  // Buscar dados reais do banco de dados
+  const allAssessorias = await prisma.assessoria.findMany({
+    include: {
+      users: {
+        where: {
+          role: 'student' // Incluir apenas alunos para contagem total de alunos na assessoria
+        }
+      },
+      payments: true // Para calcular receita
+    }
+  });
+
+  const allAdmins = await prisma.user.findMany({
+    where: {
+      role: {
+        in: ['admin', 'superadmin'] // Buscar todos os usuários que são admin ou superadmin
+      }
+    },
+    include: {
+      assessoria: true // Incluir dados da assessoria para exibição
+    }
+  });
+
+  // Calcular métricas do sistema com base nos dados reais
+  const totalAssessorias = allAssessorias.length;
+  const totalTrainers = allAdmins.filter(admin => admin.role === 'admin').length;
+  const totalStudents = allAssessorias.reduce((sum, assessoria) => sum + assessoria.users.length, 0);
+  const totalRevenue = allAssessorias.reduce((sum, assessoria) => 
+    sum + assessoria.payments.reduce((acc, payment) => acc + (payment.status === 'paid' ? payment.amount : 0), 0), 0
+  );
+
 
   const systemMetrics = [
     {
       title: "Total de Assessorias",
-      value: "12",
-      change: "+2 este mês",
+      value: totalAssessorias.toString(),
+      change: "+2 este mês", // Placeholder, você precisaria de lógica de data para isso
       changeType: "positive",
       icon: Building,
       color: "text-blue-600",
     },
     {
       title: "Treinadores Ativos",
-      value: "45",
-      change: "+8 este mês",
+      value: totalTrainers.toString(),
+      change: "+8 este mês", // Placeholder
       changeType: "positive",
       icon: Users,
       color: "text-green-600",
     },
     {
       title: "Alunos Totais",
-      value: "1,247",
-      change: "+156 este mês",
+      value: totalStudents.toLocaleString(),
+      change: "+156 este mês", // Placeholder
       changeType: "positive",
       icon: Activity,
       color: "text-orange-600",
     },
     {
       title: "Receita Total",
-      value: "R$ 89.450",
-      change: "+12.5%",
+      value: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalRevenue),
+      change: "+12.5%", // Placeholder
       changeType: "positive",
       icon: DollarSign,
       color: "text-purple-600",
     },
-  ]
+  ];
 
-  const assessorias = [
-    {
-      id: 1,
-      name: "RunFast Assessoria",
-      owner: "Carlos Silva",
-      email: "carlos@runfast.com",
-      students: 24,
-      trainers: 3,
-      revenue: 12450,
-      status: "active",
-      createdAt: "2023-06-15",
-      plan: "Premium",
-    },
-    {
-      id: 2,
-      name: "Speed Training",
-      owner: "Ana Oliveira",
-      email: "ana@speedtraining.com",
-      students: 18,
-      trainers: 2,
-      revenue: 8900,
-      status: "active",
-      createdAt: "2023-08-22",
-      plan: "Pro",
-    },
-    {
-      id: 3,
-      name: "Corrida & Vida",
-      owner: "Pedro Santos",
-      email: "pedro@corridaevida.com",
-      students: 32,
-      trainers: 4,
-      revenue: 15600,
-      status: "active",
-      createdAt: "2023-04-10",
-      plan: "Premium",
-    },
-    {
-      id: 4,
-      name: "Marathon Club",
-      owner: "Maria Costa",
-      email: "maria@marathonclub.com",
-      students: 8,
-      trainers: 1,
-      revenue: 3200,
-      status: "trial",
-      createdAt: "2024-01-05",
-      plan: "Basic",
-    },
-  ]
+  const assessorias = allAssessorias.map(ass => ({
+    id: ass.id,
+    name: ass.name,
+    owner: ass.ownerName, // Mapeado de owner_name no DB
+    email: ass.ownerEmail, // Mapeado de owner_email no DB
+    students: ass.users.length, // Contagem de alunos associados
+    trainers: allAdmins.filter(admin => admin.assessoriaId === ass.id && admin.role === 'admin').length, // Contagem de treinadores associados
+    revenue: ass.payments.reduce((acc, payment) => acc + (payment.status === 'paid' ? payment.amount : 0), 0), // Soma dos pagamentos 'paid'
+    status: ass.status,
+    createdAt: ass.createdAt.toISOString(), // Converter Date para string
+    plan: ass.plan,
+  }));
 
-  const admins = [
-    {
-      id: 1,
-      name: "Carlos Silva",
-      email: "carlos@runfast.com",
-      avatar: "/placeholder.svg?height=32&width=32",
-      initials: "CS",
-      assessoria: "RunFast Assessoria",
-      role: "Owner",
-      lastLogin: "2024-01-18 14:30",
-      status: "active",
-    },
-    {
-      id: 2,
-      name: "Ana Oliveira",
-      email: "ana@speedtraining.com",
-      avatar: "/placeholder.svg?height=32&width=32",
-      initials: "AO",
-      assessoria: "Speed Training",
-      role: "Owner",
-      lastLogin: "2024-01-18 09:15",
-      status: "active",
-    },
-    {
-      id: 3,
-      name: "Pedro Santos",
-      email: "pedro@corridaevida.com",
-      avatar: "/placeholder.svg?height=32&width=32",
-      initials: "PS",
-      assessoria: "Corrida & Vida",
-      role: "Owner",
-      lastLogin: "2024-01-17 16:45",
-      status: "active",
-    },
-    {
-      id: 4,
-      name: "João Treinador",
-      email: "joao@runfast.com",
-      avatar: "/placeholder.svg?height=32&width=32",
-      initials: "JT",
-      assessoria: "RunFast Assessoria",
-      role: "Trainer",
-      lastLogin: "2024-01-18 11:20",
-      status: "active",
-    },
-  ]
+  const admins = allAdmins.map(admin => ({
+    id: admin.id,
+    name: admin.name,
+    email: admin.email,
+    avatar: admin.avatarUrl || "/placeholder.svg?height=32&width=32", // Usar avatar_url
+    initials: admin.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(), // Gerar iniciais
+    assessoria: admin.assessoria?.name || 'N/A', // Nome da assessoria associada
+    role: admin.role === 'admin' ? 'Trainer' : 'Owner', // Ajustar o texto da role
+    lastLogin: admin.lastLogin?.toLocaleString('pt-BR') || 'Nunca', // Formatar data
+    status: admin.status,
+  }));
+
+  const [searchTerm, setSearchTerm] = useState(""); // Este useState não será usado diretamente em Server Components, mas pode ser útil se você renderizar um componente cliente que use o input de busca. Por enquanto, pode permanecer.
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "active":
-        return <Badge className="bg-green-100 text-green-800">Ativo</Badge>
+        return <Badge className="bg-green-100 text-green-800">Ativo</Badge>;
       case "trial":
-        return <Badge className="bg-yellow-100 text-yellow-800">Trial</Badge>
+        return <Badge className="bg-yellow-100 text-yellow-800">Trial</Badge>;
       case "suspended":
-        return <Badge className="bg-red-100 text-red-800">Suspenso</Badge>
+        return <Badge className="bg-red-100 text-red-800">Suspenso</Badge>;
       default:
-        return <Badge variant="secondary">Desconhecido</Badge>
+        return <Badge variant="secondary">Desconhecido</Badge>;
     }
-  }
+  };
 
   const getPlanBadge = (plan: string) => {
     switch (plan) {
-      case "Premium":
-        return <Badge className="bg-purple-100 text-purple-800">Premium</Badge>
-      case "Pro":
-        return <Badge className="bg-blue-100 text-blue-800">Pro</Badge>
-      case "Basic":
-        return <Badge className="bg-gray-100 text-gray-800">Basic</Badge>
+      case "premium": // Usar 'premium' como no DB
+        return <Badge className="bg-purple-100 text-purple-800">Premium</Badge>;
+      case "pro": // Usar 'pro' como no DB
+        return <Badge className="bg-blue-100 text-blue-800">Pro</Badge>;
+      case "basic": // Usar 'basic' como no DB
+        return <Badge className="bg-gray-100 text-gray-800">Basic</Badge>;
       default:
-        return <Badge variant="secondary">-</Badge>
+        return <Badge variant="secondary">-</Badge>;
     }
-  }
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
-    }).format(value)
-  }
+    }).format(value);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -213,7 +177,7 @@ export default function SuperAdminDashboard() {
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <Shield className="h-8 w-8 text-red-600" />
-              <span className="text-xl font-bold text-gray-900">SuperAdmin</span>
+              <span className="ml-2 text-xl font-bold text-gray-900">SuperAdmin</span>
             </div>
           </div>
 
@@ -290,6 +254,9 @@ export default function SuperAdminDashboard() {
                   </div>
                   <div className="flex items-center space-x-4">
                     <div className="relative">
+                      {/* O input de busca atualmente não filtra dados do DB no lado do servidor,
+                          mas pode ser usado para filtrar no lado do cliente se você passar
+                          os dados completos para um Client Component. */}
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                       <Input
                         placeholder="Buscar assessorias..."
@@ -579,5 +546,5 @@ export default function SuperAdminDashboard() {
         </Tabs>
       </div>
     </div>
-  )
+  );
 }
